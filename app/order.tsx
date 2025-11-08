@@ -2,13 +2,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { debounce } from 'lodash';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
   addItemToOrderAsync,
   createOrder,
   getCategories,
   getMenuItems,
-  getOrderByTable, // ĐÃ THÊM
+  getOrderByTable,
   updateOrderStatus,
 } from '../src/services/database';
 import { printKitchenBill, printPaymentBill } from '../src/services/print';
@@ -44,6 +44,7 @@ export default function OrderScreen() {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [orderItems, setOrderItems] = useState<Map<number, number>>(new Map());
+  const [printedItems, setPrintedItems] = useState<Map<number, number>>(new Map());
   const [orderId, setOrderId] = useState<number | null>(null);
 
   const menu = useMemo(() => getMenuItems(), []);
@@ -56,6 +57,7 @@ export default function OrderScreen() {
       const map = new Map();
       items.forEach(i => map.set(i.menu_item_id, (map.get(i.menu_item_id) || 0) + i.quantity));
       setOrderItems(map);
+      setPrintedItems(map);
     }
   }, [tableName]);
 
@@ -112,7 +114,7 @@ export default function OrderScreen() {
 
       <TextInput
         style={styles.search}
-        placeholder="Tìm món (gõ 1 chữ là ra)"
+        placeholder="Tìm đi món gì cũng không có"
         onChangeText={setSearch}
         autoFocus={false}
       />
@@ -162,7 +164,31 @@ export default function OrderScreen() {
       <View style={styles.footer}>
         <Text style={styles.total}>Tổng: {total.toLocaleString()}đ</Text>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.printBtn} onPress={() => printKitchenBill(tableName, orderItems, menu)}>
+          <TouchableOpacity style={styles.printBtn} onPress={() => {
+              //tính toán các món mới/thay đổi
+              const itemsToPrint = new Map<number, number>();
+
+              orderItems.forEach((currentQty, id) => {
+                const printedQty = printedItems.get(id) || 0;
+                const diff = currentQty - printedQty;
+
+                if(diff > 0){
+                  itemsToPrint.set(id, diff);
+                }
+              });
+
+              //kiểm tra xem có gì để in không
+              if(itemsToPrint.size === 0){
+                Alert.alert('thông báo', 'Không có món mới để in bếp.');
+                console.log("không có món mới để in bếp.");
+                return;
+              }
+
+              //Gọi hàm in chỉ với các món mới
+              printKitchenBill(tableName, itemsToPrint, menu);
+              //Cập nhật lại trạng thái "đã in"(chốt baseline mới)
+              setPrintedItems(new Map(orderItems));
+          }}>
             <Text style={styles.printText}>In bếp</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.payBtn} onPress={() => printPaymentBill(tableName, orderItems, menu, () => {

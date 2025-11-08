@@ -9,6 +9,8 @@ let isInitialized = false;
 const INIT_KEY = 'db_initialized';
 
 export const initDatabase = async () => {
+  if(isInitialized) return;
+  isInitialized = true;
   const alreadyInit = await AsyncStorage.getItem(INIT_KEY);
   if (alreadyInit === 'true') return;
 
